@@ -1,0 +1,10 @@
+<?php
+/**
+ * Implementation of hook_install().
+ */
+function acx_install() {}
+
+/**
+ * Implementation of hook_uninstall().
+ */
+function acx_uninstall() {}

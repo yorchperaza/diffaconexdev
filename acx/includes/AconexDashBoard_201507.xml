@@ -1,0 +1,38 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Report xsi:schemaLocation="AconexDashboard http://reportserver/?%2fAconexDashboard&amp;rs%3aFormat=XML&amp;rc%3aSchema=True" Name="AconexDashboard" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns="AconexDashboard">
+	<DailyData>
+		<Detail_Collection>
+			<Detail dateKey="20150701" numProjects="3698860" numMails="882361204" numDocuments="656190314" />
+			<Detail dateKey="20150702" numProjects="25370" numMails="884972147" numDocuments="661387776" />
+			<Detail dateKey="20150703" numProjects="25376" numMails="885481697" numDocuments="661853170" />
+			<Detail dateKey="20150704" numProjects="25384" numMails="885696805" numDocuments="662007341" />
+			<Detail dateKey="20150705" numProjects="25389" numMails="885972021" numDocuments="662202688" />
+			<Detail dateKey="20150706" numProjects="25409" numMails="886778524" numDocuments="662854204" />
+			<Detail dateKey="20150707" numProjects="25430" numMails="887630203" numDocuments="663621141" />
+			<Detail dateKey="20150708" numProjects="25459" numMails="888458361" numDocuments="664229997" />
+			<Detail dateKey="20150709" numProjects="25477" numMails="889269816" numDocuments="664954512" />
+			<Detail dateKey="20150710" numProjects="25493" numMails="889837755" numDocuments="665431582" />
+			<Detail dateKey="20150711" numProjects="25500" numMails="890057389" numDocuments="665590156" />
+			<Detail dateKey="20150712" numProjects="25507" numMails="890340179" numDocuments="665794179" />
+			<Detail dateKey="20150713" numProjects="25521" numMails="891165462" numDocuments="666483050" />
+			<Detail dateKey="20150714" numProjects="25529" numMails="892001453" numDocuments="667133525" />
+			<Detail dateKey="20150715" numProjects="25542" numMails="892816781" numDocuments="667763431" />
+			<Detail dateKey="20150716" numProjects="25558" numMails="893605664" numDocuments="668389233" />
+			<Detail dateKey="20150717" numProjects="25566" numMails="894123293" numDocuments="668898988" />
+			<Detail dateKey="20150718" numProjects="25566" numMails="894228078" numDocuments="668986706" />
+			<Detail dateKey="20150719" numProjects="25566" numMails="894365820" numDocuments="669102289" />
+			<Detail dateKey="20150720" numProjects="25573" numMails="895048173" numDocuments="669713432" />
+			<Detail dateKey="20150721" numProjects="25588" numMails="895830441" numDocuments="670389454" />
+			<Detail dateKey="20150722" numProjects="25603" numMails="896657914" numDocuments="671080390" />
+			<Detail dateKey="20150723" numProjects="25623" numMails="897461739" numDocuments="671709270" />
+			<Detail dateKey="20150724" numProjects="25629" numMails="898028337" numDocuments="672303302" />
+			<Detail dateKey="20150725" numProjects="25629" numMails="898264934" numDocuments="672473270" />
+			<Detail dateKey="20150726" numProjects="25630" numMails="898556351" numDocuments="672725469" />
+			<Detail dateKey="20150727" numProjects="25643" numMails="899376887" numDocuments="673348707" />
+			<Detail dateKey="20150728" numProjects="25657" numMails="900228280" numDocuments="673996847" />
+			<Detail dateKey="20150729" numProjects="25664" numMails="901074505" numDocuments="674618368" />
+			<Detail dateKey="20150730" numProjects="25677" numMails="901891390" numDocuments="675268307" />
+			<Detail dateKey="20150731" numProjects="3715944" numMails="902443217" numDocuments="675844626" />
+		</Detail_Collection>
+	</DailyData>
+</Report>

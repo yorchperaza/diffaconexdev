@@ -1,0 +1,958 @@
+<?php
+/**
+ * @file
+ * Base module for Aconex
+ */
+
+/**
+ * Implementation of 'hook_init()'.
+ */
+function acx_init() {
+  if(!isset($_SESSION)){
+		session_start();
+	}
+
+
+  require_once(drupal_get_path('module', 'acx') . '/includes/demandbase.inc');
+  require_once(drupal_get_path('module', 'acx') . '/includes/akamai.inc');
+  require_once(drupal_get_path('module', 'acx') . '/includes/gmap.inc');
+  require_once(drupal_get_path('module', 'acx') . '/includes/include.inc');
+  require_once(drupal_get_path('module', 'acx') . '/includes/language.inc');
+
+  // Set region info to session.
+  $region = 'US'; // default region.
+  $reset = false;
+
+  // Try to get the region from the region switcher module.
+  if (module_exists('acx_region_switcher') && $region = acx_region_get_current_region()) {
+    $reset = true;
+  }
+
+  // Save the region to the session.
+  acx_set_region_info_to_session($region, $reset);
+
+  require_once(drupal_get_path('module', 'acx') . '/includes/views.inc');
+  require_once(drupal_get_path('module', 'acx') . '/includes/project.inc');
+}
+
+/**
+ * Helper module to set Akamai info in session.
+ *
+ * @param string $country_code
+ * @param bool $reset
+ */
+function acx_set_region_info_to_session($country_code = 'US', $reset = false) {
+  if ($reset) {
+    unset($_SESSION['akamai']);
+  }
+  
+  // Store for later use
+  if(isset($_SERVER['HTTP_X_AKAMAI_EDGESCAPE'])) {
+    $country_code = parse_akamai_info();
+  }
+
+  $_SESSION['akamai']['country_code'] = $country_code;
+  $region_data = get_region_info($country_code);
+  $_SESSION['akamai']['region_info'] = $region_data;
+  // Readily available for regional searching
+  $_SESSION['akamai']['region_tid'] = isset($region_data->tid) ? $region_data->tid : FALSE;
+  $_SESSION['akamai']['current_region_tid'] = isset($region_data->current_region_tid) ? $region_data->current_region_tid : FALSE;
+}
+
+/**
+ * Returns the current region term id and it's parent.
+ */
+function acx_get_current_region_tid() {
+  return array(
+    'term' => $_SESSION['akamai']['current_region_tid'],
+    'parent' => $_SESSION['akamai']['region_tid'],
+  );
+}
+
+/**
+ * Implementation of 'hook_css_alter()'.
+ * Used here to remove extraneous css
+**/
+function acx_css_alter(&$css) {
+	//unset($css[drupal_get_path('module', 'system') . '/system.menus.css']);
+}
+
+/**
+ * Implementation of 'hook_js_alter()'.
+ * Used here to remove extraneous css
+**/
+function acx_js_alter(&$javascript) {
+	if (arg(0) != 'admin' && !(arg(1) == 'add' || arg(2) == 'edit') && arg(0) != 'panels' && arg(0) != 'ctools')
+	{
+		// Due to issues with core, only change non-admin jquery
+		$javascript['misc/jquery.js']['data'] = '//code.jquery.com/jquery-1.11.1.min.js';
+		$javascript['misc/jquery.js']['type'] = 'external';
+		$javascript['misc/jquery.js']['weight'] = -20;
+	}
+}
+
+/**
+ * Implements hook_page_alter()
+ *
+**/
+function acx_page_alter(&$page) {}
+
+
+/**
+ * Implements hook_page_build()
+ *
+**/
+function acx_page_build(&$page)
+{
+	global $language;
+
+  // Alter page content for Industries overview
+	$node = get_page_node($page);
+
+	// Make page title available
+	$page['head_title'] = (isset($node->title)) ? $node->title : '';
+
+	// Rewrite various 'page' content type because of requirement to retain previously established content. Thus the hard-coding of node ids.
+	// when updating view regions, the view must exist in the views configuration
+	if(isset($node->nid))
+	{
+		switch($node->nid)
+		{
+			// Login page
+			case '32'://English
+			case '1619'://Chinese, Simplified
+			case '1620'://Japanese
+			case '1621'://Korean
+			case '1623'://Spanish
+			case '1622'://Italian
+			case '1624'://French
+				$page['login_form'] = views_login_form();
+			break;
+			case '231':
+				$page['body'] = $node->body[LANGUAGE_NONE][0]['value'];
+			break;
+			//Events overview
+			case '237'://en
+			case '1572'://zh-hans
+			case '573'://ja
+			case '1631'://ko
+			case '1574'://es
+			case '1575'://it
+			case '1576'://fr
+				$page['events_listing'] = views_events_listing();
+			break;
+			//featured resources
+			case '616'://en
+			case '1639'://zh-hans
+			case '1638'://ja
+			case '1637'://ko
+			case '1636'://es
+			case '1634'://it
+			case '1635'://fr
+				$page['resources_overview'] = views_resources_listing();
+			break;
+			case '619': //e-books (white-papers)
+			case '620': //brochures
+			case '1312': //videos
+			case '1313': //webinars
+			case '1314': //fact sheets
+				// resources grid
+				unset($page['resources_list']);
+				if($node->nid == '619')
+				{
+					// brochures
+					$block = module_invoke('views', 'block_view', 'brochures-ebooks');
+				}
+				elseif($node->nid == '620')
+				{
+					// brochures
+					$block = module_invoke('views', 'block_view', 'brochures-block');
+				}
+				elseif($node->nid == '1312')
+				{
+					// videos
+					$block = module_invoke('views', 'block_view', 'resource_oveview_videos-listing');
+				}
+				elseif($node->nid == '1313')
+				{
+					// webinars
+					$block = module_invoke('views', 'block_view', 'resource_overview_webinars-listing');
+				}
+				elseif($node->nid == '1314')
+				{
+					// fact-sheets
+					$block = module_invoke('views', 'block_view', 'brochures-fact_sheets');
+				}
+				$page['resources_list'] = $block;
+			//Register page
+			case '734'://en
+			case '1625'://zh-hans
+			case '1626'://ja
+			case '1627'://ko
+			case '1628'://es
+			case '1629'://it
+			case '1630'://fr
+				$page['register_tree'] = views_register();
+			break;
+			case '855':
+				// leadership
+				unset($page['leadership']);
+				$page['leadership']['views_leadership-block']['#markup'] = views_leadership();
+			break;
+			// solutions overview
+			case '1168'://en
+			case '1462'://zh-hans
+			case '1463'://ja
+			case '1632'://ko
+			case '1464'://es
+			case '1465'://it
+			case '1466'://fr
+				unset($page['solutions_list']);
+				$page['solutions_list']['views_solutions_list-block']['#markup'] = views_solutions_overview();
+			break;
+			// industries overview
+			case '1169'://en
+			case '1458'://zh-hans
+			case '1459'://ja
+			case '1633'://ko
+			case '1452'://es
+			case '1460'://it
+			case '1461'://fr
+				unset($page['industries_grid']);
+				$page['industries_grid']['views_industries_grid-block']['#markup'] = views_industry_overview();
+				unset($page['org_types_grid']);
+				$page['org_types_grid']['views_org_types_grid-block']['#markup'] = views_org_type_overview();
+			break;
+		}
+  }
+	// Add some sections of content to the Industries detail/org type pages
+	if(isset($node->type))
+	{
+		if($node->type == 'homepage')
+		{
+			// Panels are over-cooked for our HTML5/responsiveness, keep it simple.
+			$page['industry_section'] = views_homepage_industry_section();
+			$page['blue_section'] = views_homepage_blue_section();
+			$resource_headline = language_block('77', 'homepage_content');
+			$page['resource_section'] = $resource_headline['content'].views_body_resource_offers($node->field_body_resource_offers[LANGUAGE_NONE]);
+			$page['homepage_metrics'] = views_homepage_project_metrics();
+		}
+		elseif($node->type == 'article')
+		{
+			unset($page['article_view']);
+			$page['article_view']['views_article_view-block']['#markup'] = views_article_view($node);
+		}
+		elseif($node->type == 'jobs_page')
+		{
+			$page['body']= views_jobs_main($node);
+			$page['our_values'] = views_jobs_values($node);
+			$page['our_offices'] = views_jobs_offices($node);
+			$page['departments'] = views_jobs_depts($node);
+			$page['job_offers'] = views_jobs_perks($node);
+		}
+		elseif($node->type == 'industries')
+		{
+			// Is this a industry detail or a overview page?
+			$depth = term_depth($node->field_project_industry[LANGUAGE_NONE][0]['tid']);
+			if($depth == 1)
+			{
+				// overview - 3x offer view
+				unset($page['client_grid']);
+				if(empty($node->field_project_industry) && !empty($node->field_org_type))
+				{
+					$industryId = $node->field_org_type[LANGUAGE_NONE][0]['tid'];
+					$industryTable = 'field_data_field_client_org_type';
+				}
+				else
+				{
+					$industryId = $node->field_project_industry[LANGUAGE_NONE][0]['tid'];
+					$industryTable = 'field_data_field_project_industry';
+				}
+				$page['client_grid']['views_client_grid-block']['#markup'] = views_client_logo_grid($industryId, $industryTable);
+				//unset($page['industry_others']);
+				//$page['industry_others']['views_industry_others-block']['#markup'] = views_industry_others_grid($node->field_project_industry[LANGUAGE_NONE][0]['tid']);
+				unset($page['body_resource_offers']);
+				if($language->language == 'en')
+					$page['body_resource_offers'] = views_body_resource_offers($node->field_body_resource_offers[LANGUAGE_NONE]);
+			}
+			elseif($depth == 2)
+			{
+				// level 3 - 3x project view
+				unset($page['project_highlights']);
+				$page['project_highlights']['views_project_highlights-block']['#markup'] = views_project_highlights($node->field_project_industry[LANGUAGE_NONE][0]['tid']);
+			}
+		}
+		elseif($node->type == 'project')
+		{
+			// custom project heading
+			$page['project_heading']['views_project_heading-block']['#markup'] = views_project_heading($node);
+			// related projects - 3x project view
+			unset($page['project_highlights']);
+			$page['project_highlights']['views_project_highlights-block']['#markup'] = views_project_highlights($node->field_project_industry[LANGUAGE_NONE][0]['tid'], NULL, $node->nid);
+		}
+	}
+
+	// Add project highlights to solutions pages
+	if(isset($node->field_is_solution) && $node->field_is_solution[LANGUAGE_NONE][0]['value'])
+	{
+		// related projects - 3x project view
+		unset($page['project_highlights']);
+		$page['project_highlights']['views_project_highlights-block']['#markup'] = views_project_highlights(NULL, $node->field_solution_category[LANGUAGE_NONE][0]['tid']);
+	}
+
+	// What banner do we need to show?
+	if(isset($node->field_homepage_banner))
+	{
+		$page['banner'] = views_homepage_banner($node->field_homepage_banner);
+		if(empty($page['banner'])){
+			// Handle empty set (should be temporary)
+			$page['banner_heading'] = $node->field_banner_heading_1[LANGUAGE_NONE][0]['value'];
+			$page['banner_caption'] = language_block('70', 'homepage_content');
+			$page['orange_bar'] = language_block('71', 'homepage_content');
+
+		}
+	}
+	elseif(isset($node->field_banners))
+	{
+		$page['banner'] = views_page_banner($node->field_banners);
+	}
+	elseif(isset($node->field_banner_image) && (isset($node->type) && $node->type == 'project') )
+	{
+		// Project or other pages that use a generic, image-only banner
+		$page['banner'] = views_page_banner_plain($node->field_banner_image[LANGUAGE_NONE][0]);
+	}
+
+	// Page & project sections to show?
+	if(isset($node->field_section)) {
+		$page['left_right_section']['views_left_right_section-block']['#markup'] = views_left_right_section($node->field_section[LANGUAGE_NONE]);
+		$page['left_right_solution_section']['views_left_right_solution_section-block']['#markup'] = views_left_right_solution_section($node->field_section[LANGUAGE_NONE]);
+		$page['section_menu_anchors'] = views_section_menu_anchors($node->field_section[LANGUAGE_NONE], $node->field_body_id, $node->field_body_title);
+	}
+
+	// Page & project sections to show?
+	if(isset($node->field_project_section))
+	{
+		$image_options = array();
+
+		if(isset($node->field_org_type[LANGUAGE_NONE][0]['tid']) && !empty($node->field_org_type[LANGUAGE_NONE][0]['tid']))
+			$image_options['org_type'] = $node->field_org_type[LANGUAGE_NONE][0]['tid'];
+		else
+			$image_options['industry'] = $node->field_project_industry[LANGUAGE_NONE][0]['tid'];
+
+		$page['left_right_p_section']['views_left_right_p_section-block']['#markup'] = views_left_right_section($node->field_project_section[LANGUAGE_NONE], TRUE, $image_options);
+	}
+
+	// Bonus SEO sub-body to show?
+	if(isset($node->field_sub_body) && !empty($node->field_sub_body))
+	{
+		$page['sub_body']['views_sub_body-block']['#markup'] = $node->field_sub_body[LANGUAGE_NONE][0]['value'];
+	}
+
+	if ( isset( $node->field_body_id ) && !empty( $node->field_body_id ) ) {
+		$page['body_id'] = $node->field_body_id[LANGUAGE_NONE][0]['value'];
+	}
+
+	//dpm($page, 'page');
+}
+
+
+/**
+ * Implements hook_preprocess_image()
+ *
+**/
+function acx_preprocess_image(&$variables) {
+	// Remove Height and Width Inline Styles from Images for responsiveness
+  foreach (array('width', 'height') as $key) {
+    unset($variables[$key]);
+  }
+}
+
+/**
+ * Validate backend save
+ *
+**/
+function acx_node_presave($node) {
+	// Fix double-slash issue for Link Field
+	if (isset($node->field_banners['und']) && !empty($node->field_banners['und'])) {
+		for($i=0; $i<count($node->field_banners['und']); $i++) {
+			if (isset($node->field_banners['und'][$i]['field_banner_button_url']) && !empty($node->field_banners['und'][$i]['field_banner_button_url'])) {
+				$node->field_banners['und'][$i]['entity']->field_banner_button_url['und'][0]['url'] = ltrim($node->field_banners['und'][$i]['entity']->field_banner_button_url['und'][0]['url'], '/');
+			}
+		}
+	}
+}
+
+
+
+/**
+ * Implements hook_block_info().
+ *
+ * This function tells drupal about our block.
+ *
+ * For more information on this function, see:
+ * http://api.drupal.org/api/drupal/modules block block.api.php/function/hook_block_info/7
+ */
+function acx_block_info() {
+	// Create an array that will hold our blocks
+	$blocks = array();
+
+	$blocks['acx_project_form'] = array(
+															        'info' => t('Project Map Filter'),
+															        'cache' => DRUPAL_NO_CACHE,
+																			);
+
+	return $blocks;
+}
+
+/**
+ * Implements hook_block_view().
+ *
+ * This function tells drupal how to define our block when viewed.
+ *
+ * For more information on this function, see:
+ * http://api.drupal.org/api/drupal/modules block block.api.php/function/hook_block_view/7
+ */
+function acx_block_view($delta = '') {
+	// Create an array that will be returned as our block
+	$block = array();
+
+	switch($delta) {
+		case 'acx_project_form':
+		  $block['subject'] = t('Project Map Filter');
+		  $block['content'] = drupal_get_form('acx_project_form');
+		break;
+	}
+
+	// Finally, we return the $block array.
+	return $block;
+}
+
+/**
+ * Define the form to be returned.
+ *
+ * Note that drupal passes in two parameters,
+ * $form - which holds all of the elements of the form
+ * $form_state - a special array of settings & values needed by Drupal
+ */
+function acx_project_form($form, &$form_state) {
+	$region_options = get_options(1);
+	// A little re-arranging
+	unset($region_options[8]);// Kill taxonomy 'All';
+	$region_options[0] = t('All');// Add "unvalued" 'All'
+	ksort($region_options);
+
+	$industry_tax = taxonomy_get_tree(6, 0, 2);
+
+  $industry_options = array(0 => t('All'));
+  foreach ($industry_tax as $term)
+    if ($term->depth == 1)
+      $industry_options[$term->tid] = $term->name;
+
+	$form['#method'] = 'post';
+	$form['#attributes']['name'] = 'project-filter';
+
+  // Add a filter title.
+  $form['title'] = array(
+    '#markup' => t('Filter'),
+    '#prefix' => '<label>', // Add these for legacy support.
+    '#suffix' => '</label>',
+  );
+
+	$form['field_region'] = array('#title' => t('Region'),
+																'#type' => 'select',
+																'#id' => 'map_region',
+																'#attributes' => array('class' => array('custom-select')),
+																'#prefix' => '<fieldset>',
+																'#suffix' => '</fieldset>',
+																'#options' => $region_options,
+																'#default_value' => isset($_GET['region']) ? $_GET['region'] : 0);
+
+	$form['field_industry'] = array('#title' => t('Industry'),
+																	'#type' => 'select',
+																	'#attributes' => array('class' => array('custom-select')),
+																	'#prefix' => '<fieldset>',
+																	'#suffix' => '</fieldset>',
+																	'#options' => $industry_options,
+																	'#default_value' => isset($_GET['industry']) ? $_GET['industry'] : 0);
+
+	$form['submit'] = array('#type' => 'submit',
+													'#attributes' => array('class' => array('button')),
+													'#value' => t('Apply'));
+
+	$form['reset'] = array( '#type' => 'submit',
+													'#id' => 'project-reset',
+										      '#button_type' => 'reset',
+										      '#value' => t('Clear'),
+										      '#weight' => 9,
+										      '#validate' => array(),
+										      '#attributes' => array('class' => array('button'),
+																		            //'onclick' => 'this.form.reset();return false;'
+																		            )
+										    );
+
+	$form['#submit'][] = 'acx_project_form_submit';
+
+	if(
+		$form_state['submitted'] && $form_state['values']['op'] == 'Clear'
+  	|| empty($_POST)
+		)
+	{
+		// Remove the session filter for _get requests (ajax load is _post)
+		$_REQUEST['field_region'] = $_REQUEST['field_industry'] = NULL;
+		unset($_SESSION['p_filter']);
+	}
+
+  // Attach js file.
+  $form['#attached']['js'][] = drupal_get_path('module', 'acx') . '/js/acx.js';
+
+	return $form;
+}
+
+/*
+ * Define a submit funciton that drupal will
+ * automatically call when submit is pressed (and all validators pass)
+ */
+function acx_project_form_submit($form, &$form_state) {
+  $form_state['rebuild'] = TRUE;
+	// Probably the easiest way to handel "load more" ajax requests
+  $_SESSION['p_filter'] = array();
+  if($form_state['submitted'] && $form_state['values']['op'] == 'Clear'
+  	|| empty($_POST)
+  )
+  {
+		$_REQUEST['field_region'] = $_REQUEST['field_industry'] = NULL;
+		unset($_SESSION['p_filter']);
+  }
+  else
+  {
+	  if(isset($_REQUEST['field_region']) && !empty($_REQUEST['field_region']) && $_REQUEST['field_region'] != '8')
+	  {
+	  	$_SESSION['p_filter']['field_region'] = $_REQUEST['field_region'];
+	  }
+	  else
+	  {
+		  unset($_SESSION['p_filter']['field_region']);
+	  }
+
+	  if(isset($_REQUEST['field_industry']) && !empty($_REQUEST['field_industry']) && $_REQUEST['field_industry'] != '0')
+	  {
+			$_SESSION['p_filter']['field_industry'] = $_REQUEST['field_industry'];
+	  }
+	  else
+	  {
+		  unset($_SESSION['p_filter']['field_industry']);
+	  }
+	}
+}
+
+
+/**
+ * Implements hook_views_api().
+ */
+function acx_views_api() {
+  return array(
+    'api' => 3,
+  );
+}
+
+/**
+ * Implements hook_node_update_index()
+ *
+ * Gets view information for pages created programmatically.
+ * Page build logic borrowed from acx_page_build()
+ *
+ */
+function acx_node_update_index($node) {
+
+	return get_text_to_index($node);
+}
+
+/**
+ * Implementation of hook_query_alter()
+ * Only show query results in the users current language
+ *
+ * Source of solution:
+ * http://drupal.stackexchange.com/questions/11290/search-only-for-the-currently-active-language
+ */
+function acx_query_alter(QueryAlterableInterface $query) {
+  $search = FALSE;
+  $node = FALSE;
+
+  foreach ($query->getTables() as $alias => $table) {
+    if ($table['table'] == 'search_index') {
+      $search = $alias;
+    }
+    elseif ($table['table'] == 'node') {
+      $node = $alias;
+    }
+  }
+
+  // Make sure we're on the search page.
+  if ($node && $search) {
+    $db_and = db_and();
+
+    $language = i18n_language_interface();
+    $lang = $language->language;
+
+    $db_and->condition($node . '.language', $lang, '=');
+    $query->condition($db_and);
+  }
+}
+
+/**
+ * Implementation of hook_preprocess_search_result()
+ * Scans search result snippet for keyword, if the key word is not present it tries to
+ * search programmatically generated content such as custom fields for a snippet containing
+ * the actual key word
+ */
+function acx_preprocess_search_result(&$variables) {
+	// Absence of the strong tag indicates that no keyword is present
+	// So lets try to find the keyword in custom field content
+	if (strpos($variables['snippet'], '<strong>') === false) {
+		$node = $variables['result']['node'];
+
+		// Get additional text for creating the result snippet
+		$textToIndex = get_text_to_index($node);
+
+		$keys = current_path();
+		$keys = explode('/', $keys);
+		$keys = array_pop($keys);
+		// Update the snippet text
+		$variables['snippet'] = $variables['result']['snippet'] = search_excerpt($keys, $textToIndex);
+	}
+}
+
+/**
+ * Function to get additional text for search indexing and search result processing.
+ * Additional text is not seen by default because it is stored from custom fields/field sets
+ */
+function get_text_to_index($node) {
+		// String of text to be indexed for current node during search
+	$textToIndex = '';
+
+	// Add some sections of content to the Industries detail/org type pages
+	if(isset($node->type))
+	{
+		if($node->type == 'industries')
+		{
+			// Is this a industry detail or a overview page?
+			$depth = term_depth($node->field_project_industry[LANGUAGE_NONE][0]['tid']);
+			if($depth == 1)
+			{
+				if($language->language == 'en')
+					$textToIndex .= views_body_resource_offers($node->field_body_resource_offers[LANGUAGE_NONE]);
+			}
+			elseif($depth == 2)
+			{
+				// level 3 - 3x project view
+				$textToIndex .= views_project_highlights($node->field_project_industry[LANGUAGE_NONE][0]['tid']);
+			}
+		}
+		elseif($node->type == 'project')
+		{
+			// custom project heading
+			$textToIndex .= views_project_heading($node);
+		}
+	}
+
+	// Add project highlights to solutions pages
+	if(isset($node->field_is_solution) && $node->field_is_solution[LANGUAGE_NONE][0]['value'])
+	{
+		// related projects - 3x project view
+		$textToIndex .= views_project_highlights(NULL, $node->field_solution_category[LANGUAGE_NONE][0]['tid']);
+	}
+
+	// Page & project sections to show?
+	if(isset($node->field_section))
+	{
+		$textToIndex .= views_left_right_section($node->field_section[LANGUAGE_NONE]);
+	}
+
+	// Page & project sections to show
+	if(isset($node->field_project_section))
+	{
+		$image_options = array();
+
+		if(isset($node->field_org_type[LANGUAGE_NONE][0]['tid']) && !empty($node->field_org_type[LANGUAGE_NONE][0]['tid']))
+			$image_options['org_type'] = $node->field_org_type[LANGUAGE_NONE][0]['tid'];
+		else
+			$image_options['industry'] = $node->field_project_industry[LANGUAGE_NONE][0]['tid'];
+
+		$textToIndex .= views_left_right_section($node->field_project_section[LANGUAGE_NONE], TRUE, $image_options);
+	}
+
+	// Bonus SEO sub-body to show?
+	if(isset($node->field_sub_body) && !empty($node->field_sub_body))
+	{
+		$textToIndex .= $node->field_sub_body[LANGUAGE_NONE][0]['value'];
+	}
+	return $textToIndex;
+}
+
+/**
+ * Modified from File Upload Replace module (https://www.drupal.org/project/upload_replace)
+ * Uses file_delete & file_presave hooks.
+ *
+ * Description from module:
+ * A module file for providing functionality to replace files on upload
+ * Typical Drupal behavior is to rename files on upload to <filename>_0.<ext>
+ * This module modifies that behavior.
+ *
+ * 1.0 - Behavior is as follows: when a user is replacing a file (remove and save).
+ *   if the file to be removed is <filename>.<ext> and the file to be saved is
+ *   <filename>_<[0-9]+>.<ext> then the file will be removed and the new file will
+ *   be renamed to <filename>.<ext>
+ */
+
+/**
+ * Implementation of hook_file_delete()
+ */
+function acx_file_delete($file) {
+
+	// If the user deletes a file and uploads a new file with the same name
+	// without saving in between, the uri for the file to be deleted is
+	// cached, so lets make sure we have the new uri for the file to be
+	// deleted.
+	$file->uri = db_select('file_managed', 'f')
+	    ->fields('f', array('uri', ))
+	    ->condition('fid', $file->fid)
+	    ->execute()
+	    ->fetchField();
+}
+
+/**
+ * Implementation of hook_file_update()
+ */
+function acx_file_presave($new_file) {
+  if (!$new_file->fid) {
+    //Nothing to do if no fileid
+    return;
+  }
+
+  $desired_destination = preg_replace('/_[0-9]+\.(.*)$/', '.$1', $new_file->uri);
+  $new_file->filename = preg_replace('/_[0-9]+\.(.*)$/', '.$1', $new_file->filename);
+
+  //echo $new_file->filename;
+  $db_path = db_select('file_managed', 'f')
+    ->fields('f', array('uri', ))
+    ->condition('fid', $new_file->fid)
+    ->execute()
+    ->fetchField();
+
+  if ($db_path != $new_file->uri) {
+    //this happens when a reversion is being reverted
+    $next_good_filepath = file_destination($desired_destination, FILE_EXISTS_RENAME);
+    db_update('file_managed')
+      ->fields(array('uri' => $next_good_filepath))
+      ->condition('fid', $new_file->fid)
+      ->execute();
+    $new_file->uri = $desired_destination;
+  }
+  else {
+    //If the filename has be modified by adding a _0 value, or
+    //on certain situations the filepath will not match the filepath in the db, such as
+    //when reverting a revision.  When reverting a revision change the filename as well
+    if (!strpos($new_file->uri, $new_file->uri)) {
+      //the filename is not in the filepath, so drupal must have added a "_0" before the extension
+      //find the file that is blocking this file from keeping the correct path
+      $result = db_select('file_managed', 'f')
+        ->fields('f')
+        //->condition('uri', db_like($desired_destination), 'LIKE')
+        ->where('CONVERT(uri USING utf8) LIKE :destination', array(':destination' => $desired_destination))
+		->orderBy('uri') // Make sure capitalised entry is retrieved first
+        ->execute();
+      //@todo only one result is handled, should allow for multiple results
+      $is_blocked = false;
+      foreach ($result as $file) {
+        $is_blocked = TRUE;
+        $blocking_file = $file;
+        $tmp_destination = file_directory_temp() ."/$blocking_file->filename";
+		$blocking_file_uri = $blocking_file->uri; // Blocking file uri can potentially have different casing
+		$blocking_file_name = $blocking_file->filename;
+		break; // Take the first result (the one that is capitalised)
+      }
+
+      $old_destination = $db_path;
+	    // Debug variable info
+	    //dpm($blocking_file_uri, "Blocking uri");
+		//dpm($old_destination, "old destination"); dpm($desired_destination, "desired dest");
+		//dpm($tmp_destination, "temp dest"); dpm($is_blocked, "blocked?");
+		//dpm($blocking_file_name, "blocking name"); //exit();
+      if ($old_destination == $desired_destination && $old_destination == $blocking_file_uri){
+      	// uri directory unchanged, so return without modifying any file paths
+      	//dpm("Return", "Returning");
+        return;
+      }
+
+      //Swap the files
+      if ($is_blocked) {
+        //move the blocking file to a temporary location
+        if (!file_unmanaged_move($blocking_file_uri, $tmp_destination)) {
+          drupal_set_message(t('The file %old could not be moved to %new', array('%old' => $blocking_file_uri, '%new' => $tmp_destination)), 'error');
+          return;
+        }
+        //DRUPAL 7 no longer changes the source filepath during move
+        //move blocking file was successful, update the DB
+        db_update('file_managed')
+          ->fields(array('uri' => $tmp_destination))
+          ->condition('fid', $blocking_file->fid)
+          ->execute();
+      }
+
+
+      //move the newfile to the prefered location
+      if (!file_unmanaged_move($old_destination, $blocking_file_uri)) {
+        drupal_set_message(t('The file %old could not be moved to %new', array('%old' => $old_destination, '%new' => $blocking_file_uri)), 'error');
+        return;
+      }
+      //move newfile was successful, update the DB
+      db_update('file_managed')
+        ->fields(array('uri' => $blocking_file_uri, 'filename' => $blocking_file_name))
+        ->condition('fid', $new_file->fid)
+        ->execute();
+      $new_file->uri = $blocking_file_uri;//set the newfile's path to the correct path
+      $new_file->filename = $blocking_file_name;
+
+      if ($is_blocked) {
+        //move the older file from temp to the new _0 location
+        if (!file_unmanaged_move($tmp_destination, $old_destination)) {
+          drupal_set_message(t('The file %old could not be moved to %new', array('%old' => $tmp_destination, '%new' => $old_destination)), 'error');
+          return;
+        }
+        //move blocking file was successful, update the DB with the actual location after file copy, so we use tmp_destination as it was updated during the move
+        db_update('file_managed')
+          ->fields(array('uri' => $old_destination))
+          ->condition('fid', $blocking_file->fid)
+          ->execute();
+      }
+	  //echo 'New file uri: ' . $new_file->uri . ' DB path: ' . $db_path . ' Desired path: ' . $desired_destination . ' Blocked: ' . $is_blocked . ' Temp Dir: ' . $tmp_destination;
+    }
+  }
+  //Have to clear the cache because the revision data is cached somewhere
+  /*
+   * Find the nids where this file is used
+  $query = "SELECT DISTINCT nid FROM {files} WHERE fid=%d";
+  $result = db_query($query, $new_file->fid);
+  while($data = db_fetch_object($result)) {
+    cache_clear_all("content:$data->nid");
+  }
+  */
+  //This is inefficent, but how can we determine what nodes use this file?
+ // cache_clear_all('*', 'cache_content', TRUE);
+}
+
+/**
+ * Tasks to be run with each cron run
+ *
+ * If tasks prove to be too computationally intensive, consider
+ * using hook_cron_queue_info() instead
+ */
+function acx_cron() {
+	define("SECONDS_IN_DAY", 86400);
+
+	// Only run cron on the 10th (file dump day) for production and if we haven't logged it already
+	$homepage_metrics_date = variable_get('acx_homepage_metrics_date', false);
+	if ( date(d) == '11' && $homepage_metrics_date < date('Y-m-d') ) {
+		$acx_metrics_name = "acx_homepage_metrics";
+
+		// Location of xml file
+		$xml_file_path = DRUPAL_ROOT . '/meterPickup/AconexDashBoard_' . date('Ym', strtotime(date('Y-m')." -2 month")) . '.xml';
+
+		// Load xml file
+		if (file_exists($xml_file_path)) {
+			$xml = simplexml_load_file($xml_file_path);
+		}
+
+		if (!isset($xml)) { // Failed to open file
+			//variable_set($acx_metrics_name, "Not set");
+			return;
+		}
+		if ($xml === false) { // Failed to parse xml
+			//variable_set($acx_metrics_name, "False");
+			return;
+		}
+
+		// Parse the xml finding first and last day
+		// @TODO: If we are provided xml with only first and last day,
+		//			we can update this code to not run a search for max/min
+		$firstDay = array("date" => 99999999);
+		$lastDay = array("date" => 0);
+		foreach($xml->DailyData->Detail_Collection->Detail as $day) {
+			$date = (int)$day->attributes()->dateKey;
+			// Set firstDay if date of current day less than previous min
+			if ($date < $firstDay['date']) {
+				$firstDay['date'] = $date;
+				$firstDay['projects'] = (int)$day->attributes()->numProjectUsers;
+				$firstDay['mail'] = (int)$day->attributes()->numMails;
+				$firstDay['documents'] = (int)$day->attributes()->numDocuments;
+			}
+			// Set lastDay if date of current day is greater than previous max
+			if ($date > $lastDay['date']) {
+				$lastDay['date'] = $date;
+				$lastDay['projects'] = (int)$day->attributes()->numProjectUsers;
+				$lastDay['mail'] = (int)$day->attributes()->numMails;
+				$lastDay['documents'] = (int)$day->attributes()->numDocuments;
+			}
+		}
+
+		// Only update metrics if we received good data in xml doc
+		if ($firstDay['date'] != 99999999 && $lastDay['date'] != 0) {
+			// Skip update if ANY values are = 0
+			if ($lastDay['projects'] != 0 && $firstDay['projects'] != 0 && $lastDay['mail'] != 0 && $firstDay['mail'] != 0 && $lastDay['documents'] != 0 && $firstDay['documents'] != 0) {
+				// Get number of days in the current month
+				$day = date('d');
+				$month = date('m');
+				$year = date('Y');
+				$days_in_month = cal_days_in_month(CAL_GREGORIAN, $month, $year);
+				$seconds_in_month = $days_in_month * SECONDS_IN_DAY;
+				$start_of_month = strtotime($year . "-" . $month . "-01T00:00:00+00:00");
+				$endmonth = strtotime($year . "-" . $month . "-31T23:59:59+00:00");
+
+				// Find how much each metric changes in a second
+				$project_delta = ($lastDay['projects'] - $firstDay['projects']) / $seconds_in_month;
+				$mail_delta = ($lastDay['mail'] - $firstDay['mail']) / $seconds_in_month;
+				$documents_delta = ($lastDay['documents'] - $firstDay['documents']) / $seconds_in_month;
+
+				$acx_metrics_value = array("firstday" => $firstDay, "lastday" => $lastDay,
+											"project_delta" => $project_delta,
+											"mail_delta" => $mail_delta,
+											"documents_delta" => $documents_delta,
+											"start_of_month" => $start_of_month,
+											"end_of_month" => $endmonth);
+
+				variable_set($acx_metrics_name, $acx_metrics_value);
+				variable_set('acx_homepage_metrics_date', "$year-$month-$day");
+			}
+		}
+	}
+}
+
+/**
+ * Implements hook_menu().
+ */
+function acx_menu() {
+	$items['admin/config/content/soluions'] = array(
+		'title' => 'Registered solutions pages',
+		'page callback' => 'drupal_get_form',
+		'page arguments' => array('acx_solutions_form'),
+		'access arguments' => array('access administration pages'),
+		'type' => MENU_NORMAL_ITEM,
+	);
+
+	return $items;
+}
+
+/**
+ * Admin form to configurable solutions pages
+ */
+function acx_solutions_form($form, &$form_state) {
+	$form['acx_soltuions_pages'] = array(
+		'#type' => 'textarea',
+		'#title' => t('Solutions Pages'),
+		'#rows' => 5,
+		'#required' => FALSE,
+		'#default_value' => variable_get('acx_soltuions_pages', ''),
+	);
+
+	return system_settings_form($form);
+}

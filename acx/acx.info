@@ -1,0 +1,10 @@
+;$Id$
+name = Aconex Base Module
+package = Aconex
+description = The base module for the "Aconex Corporate Site" project.
+core = 7.x
+version = "7.x-1.0"
+project = "Aconex"
+dependencies[] = node
+dependencies[] = user
+dependencies[] = gmap
